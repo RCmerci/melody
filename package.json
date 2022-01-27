@@ -1,0 +1,16 @@
+{
+  "name": "melody",
+  "version": "0.0.1",
+  "private": true,
+  "devDependencies": {
+    "shadow-cljs": "2.16.12"
+  },
+  "dependencies": {
+    "ali-oss": "^6.16.0",
+    "audio-play": "^2.3.1",
+    "crypto-js": "^4.1.1",
+    "path": "^0.12.7",
+    "react": "^17.0.2",
+    "react-dom": "^17.0.2"
+  }
+}
