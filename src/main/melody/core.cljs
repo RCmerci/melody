@@ -170,7 +170,7 @@
           (-> (a/<! (song-name->data name))
               (audio-data->audio-buffer-source :init-volume init-volume)
               a/<!)]
-      (when end-ch (.-onended source #(a/close! end-ch)))
+      (when end-ch (set! (.-onended source) #(a/close! end-ch)))
       (.start source)
       (s/conform ::play-source res))))
 
@@ -246,21 +246,22 @@
              (:skip @state) ([_] (println :skip) :skip)
              (:replay @state) ([_] (println :replay) :replay)
              end-ch ([_] (println :end) :end))
-           true}]
+           true}
+          playlist2 (:play-list @state)]
       (cond
         pause
         (do (stop! play-source)
-            (rest (:play-list @state)))
+            (rest playlist2))
         skip
         (do (stop! play-source)
-            (swap! state assoc :play-list (rest (:play-list @state)))
+            (swap! state assoc :play-list (rest playlist2))
             (a/<! (play-playlist!)))
         replay
         (do (stop! play-source)
-            (swap! state assoc :play-list (:play-list @state))
+            (swap! state assoc :play-list playlist2)
             (a/<! (play-playlist!)))
         end
-        (do (swap! state assoc :play-list (rest (:play-list @state)))
+        (do (swap! state assoc :play-list (rest playlist2))
             (a/<! (play-playlist!)))))))
 
 (defn priority-play!
@@ -360,27 +361,32 @@
      [:option {:selected (and (= :ordered mode) "selected")} "ordered"]
      [:option {:selected (and (= :cycle mode) "selected")} "cycle"]]))
 
-(rum/defc controller
+(rum/defc controller < rum/reactive
   []
-  [:div
-   (playlist-mode)
-   [:button {:type "button"
-             :on-click #(play-playlist!)}
-    "play"]
-   [:button {:type "button"
-             :on-click #(a/offer! (:pause @state) true)}
-    "pause"]
-   [:button {:type "button"
-             :on-click #(a/offer! (:skip @state) true)}
-    "skip"]
-   [:button {:type "button"
-             :on-click #(a/offer! (:replay @state) true)}
-    "replay"]
-   [:input {:type "range"
-            :on-change #(let [v (-> % .-target .-value js/parseInt)]
-                          (some-> (:current-play-source @state)
-                                  (change-volume! v))
-                          (change-default-volume! v))}]])
+  (let [current-play-song-name (rum/react (rum/cursor state :current-play-song-name))]
+    [:div
+     (playlist-mode)
+     (when-not current-play-song-name
+       [:button {:type "button"
+                 :on-click #(play-playlist!)}
+        "play"])
+     (when current-play-song-name
+       [:button {:type "button"
+                 :on-click #(a/offer! (:pause @state) true)}
+        "pause"])
+     (when current-play-song-name
+       [:button {:type "button"
+                 :on-click #(a/offer! (:skip @state) true)}
+        "skip"])
+     (when current-play-song-name
+       [:button {:type "button"
+                 :on-click #(a/offer! (:replay @state) true)}
+        "replay"])
+     [:input {:type "range"
+              :on-change #(let [v (-> % .-target .-value js/parseInt)]
+                            (some-> (:current-play-source @state)
+                                    (change-volume! v))
+                            (change-default-volume! v))}]]))
 
 (rum/defc main-ui < rum/reactive
   []

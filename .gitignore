@@ -1,5 +1,6 @@
 node_modules/
 public/js
+public/assets
 
 /target
 /checkouts
@@ -18,3 +19,5 @@ pom.xml.asc
 
 .hgignore
 .hg/
+/.cpcache/
+/.clj-kondo/.cache/
