@@ -223,6 +223,25 @@
 
 
 ;;; play playlist
+(defn pause!
+  [play-source]
+  (stop! play-source)
+  (swap! state assoc :current-play-song-name nil)
+  (swap! state assoc :current-play-source nil))
+
+(defn skip!
+  [play-source]
+  (stop! play-source)
+  (swap! state assoc :play-list (rest (:play-list @state))))
+
+(defn replay!
+  [play-source]
+  (stop! play-source))
+
+(defn next!
+  []
+  (swap! state assoc :play-list (rest (:play-list @state))))
+
 (defn play-playlist!
   "play songs on playlist,
   return rest playlist when pause-ch triggered"
@@ -246,28 +265,29 @@
              (:skip @state) ([_] (println :skip) :skip)
              (:replay @state) ([_] (println :replay) :replay)
              end-ch ([_] (println :end) :end))
-           true}
-          playlist2 (:play-list @state)]
+           true}]
       (cond
         pause
-        (do (stop! play-source)
-            (rest playlist2))
+        (pause! play-source)
         skip
-        (do (stop! play-source)
-            (swap! state assoc :play-list (rest playlist2))
+        (do (skip! play-source)
             (a/<! (play-playlist!)))
         replay
-        (do (stop! play-source)
-            (swap! state assoc :play-list playlist2)
+        (do (replay! play-source)
             (a/<! (play-playlist!)))
         end
-        (do (swap! state assoc :play-list (rest playlist2))
+        (do (next!)
             (a/<! (play-playlist!)))))))
 
 (defn priority-play!
+  "1. cons NAME to playlist
+  2. replay, N.B. replay stop current play-source, then play next one"
   [name]
+  (swap! state assoc :play-list (cons name (:play-list @state)))
+  (when-not (:current-play-song-name @state)
+    (play-playlist!))
+  (a/offer! (:replay @state) true))
 
-)
 ;;; TODO: encrypt
 
 ;;; ui
@@ -329,11 +349,7 @@
                                  (swap! *refresh-personal-play-list not))}
            "remove from playlist"]
           [:button {:type "button"
-                    :on-click (fn [_]
-                                (a/go
-                                  (let [source (a/<! (play! name nil (:current-volume @state)))]
-                                    (reset! (rum/cursor state :current-play-source) source)
-                                    (swap! state assoc :current-play-song-name name))))}
+                    :on-click #(priority-play! name)}
            "play"]]])]]))
 
 (rum/defc upload
