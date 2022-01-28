@@ -7,7 +7,8 @@
             ["buffer" :refer [Buffer]]
             ["path" :as path]
             [cljs.spec.alpha :as s]
-            ["crypto-js" :as c]))
+            ["crypto-js" :as c]
+            ["/melody/util" :refer [CryptJsWordArrayToUint8Array]]))
 ;;; utils
 (defn- ->array-buffer [o]
   (cond
@@ -18,6 +19,22 @@
     :else
     (throw (js/Error. (type o)))))
 
+(defn- ->word-array [o]
+  (-> c .-lib .-WordArray (.create o)))
+
+(defn- encrypt [o]
+  {:pre [(or (instance? js/ArrayBuffer o)
+             (instance? js/Uint8Array o))]
+   :post [(instance? js/Uint8Array %)]}
+  (let [s (-> c .-AES (.encrypt (->word-array o) "airport-in-10-30") .toString)]
+    (.encode (new js/TextEncoder) s)))
+
+(defn- decrypt [o]
+  {:pre [(or (instance? js/ArrayBuffer o)
+             (instance? js/Uint8Array o))]
+   :post [(instance? js/Uint8Array %)]}
+  (let [s (.decode (new js/TextDecoder) o)]
+    (-> c .-AES (.decrypt s "airport-in-10-30") CryptJsWordArrayToUint8Array)))
 ;;; indexdb operations
 (def db (atom nil))
 (def store-name "melody-store")
@@ -113,6 +130,7 @@
   "fetch from oss then store into indexdb"
   [name]
   (a/go (some->> (a/<! (oss/get client (path/join "data" (js/encodeURIComponent name))))
+                 decrypt
                  (store-song! name))))
 
 (defn upload!
@@ -120,8 +138,9 @@
   [name file]
   (a/go
     (println "start uploading" name)
-    (let [arr-buf(a/<! (p->c (.arrayBuffer file)))
-          buf (.from Buffer arr-buf)
+    (let [arr-buf (a/<! (p->c (.arrayBuffer file)))
+          encrypted (encrypt arr-buf)
+          buf (.from Buffer encrypted)
           r (a/<! (oss/put client (path/join "data" (js/encodeURIComponent name)) buf))]
       (if (instance? ExceptionInfo r)
         (throw (js/Error. r))
@@ -155,11 +174,14 @@
 
 (defn song-name->data
   [name]
-  (a/go (or
-         (a/<! (get-song-data name)) ;; search in indexdb first
-         (a/<! (download! name))   ; if not exist, then download from oss
-         (a/<! (get-song-data name)) ; finally fetch from indexdb again
-         (throw (js/Error. (str "not found [" name "]")))))) ; still not found? throw error
+  {:pre [(string? name)]}
+  (a/go
+
+    (or
+     (a/<! (get-song-data name)) ;; search in indexdb first
+     (do (a/<! (download! name))    ; if not exist, then download from oss
+         (a/<! (get-song-data name)))    ; finally fetch from indexdb again
+     (throw (js/Error. (str "not found [" name "]")))))) ; still not found? throw error
 
 (defn play!
   "return ::play-source
@@ -251,9 +273,9 @@
     (a/poll! (:pause @state))
     (a/poll! (:skip @state))
     (a/poll! (:replay @state))
-    (let [playlist (or (:play-list @state)
+    (let [playlist (or (seq (:play-list @state))
                        (do (a/<! (update-playlist! (:play-list-mode @state)))
-                           (:play-list @state)))
+                           (seq (:play-list @state))))
           end-ch (a/chan)
           ;; play first song on playlist
           play-source (a/<! (play! (first playlist) end-ch (:current-volume @state)))
