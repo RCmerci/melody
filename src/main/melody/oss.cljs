@@ -48,4 +48,5 @@
   (oss (clj->js {:region "oss-cn-hangzhou"
                  :accessKeyId accesskey-id
                  :accessKeySecret accesskey-secret
-                 :bucket "airport-in-10-30"})))
+                 :bucket "airport-in-10-30"
+                 :secure true})))
