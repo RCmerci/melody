@@ -1,6 +1,5 @@
 node_modules/
 public/js
-public/assets
 
 /target
 /checkouts
@@ -21,3 +20,5 @@ pom.xml.asc
 .hg/
 /.cpcache/
 /.clj-kondo/.cache/
+/public/assets/app/js/cljs-runtime
+/public/assets/app/js/manifest.edn
