@@ -163,12 +163,14 @@
             (log! (str "uploaded [" name "]")))))))
 
 ;;; play
+
+(def audio-ctx (new js/AudioContext))
 (defn audio-data->audio-buffer-source
   "return ::play-source
   https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/decodeAudioData
   https://developer.mozilla.org/en-US/docs/Web/API/BaseAudioContext/createGain"
   [data-buffer & {:keys [init-volume] :or {init-volume 1}}]
-  (let [audio-ctx (new js/AudioContext)
+  (let [audio-ctx audio-ctx
         gain-node (.createGain audio-ctx)
         source (.createBufferSource audio-ctx)
         ch (a/chan 1)]
@@ -398,7 +400,8 @@
                                  (swap! *refresh-personal-play-list not))}
            "remove from playlist"]
           [:button {:type "button"
-                    :on-click #(priority-play! name)}
+                    :on-click #(do (priority-play! name)
+                                   (.resume audio-ctx))}
            "play"]]])]]))
 
 (rum/defc upload
@@ -444,7 +447,8 @@
      (playlist-mode)
      (when-not current-play-song-name
        [:button {:type "button"
-                 :on-click #(play-playlist!)}
+                 :on-click #(do (play-playlist!)
+                                (.resume audio-ctx))}
         "play"])
      (when current-play-song-name
        [:button {:type "button"
@@ -452,11 +456,13 @@
         "pause"])
      (when current-play-song-name
        [:button {:type "button"
-                 :on-click #(a/offer! (:skip @state) true)}
+                 :on-click #(do (a/offer! (:skip @state) true)
+                                (.resume audio-ctx))}
         "skip"])
      (when current-play-song-name
        [:button {:type "button"
-                 :on-click #(a/offer! (:replay @state) true)}
+                 :on-click #(do (a/offer! (:replay @state) true)
+                                (.resume audio-ctx))}
         "replay"])
      [:input {:type "range"
               :on-change #(let [v (-> % .-target .-value js/parseInt)]
