@@ -7,5 +7,10 @@
   "background_color": "#ffffff",
   "theme_color": "#ffffff",
   "display": "standalone", 
-  "icons": []
+  "icons": [
+      {
+        "src": "/melody/icon.png",
+        "type": "image/png",
+        "sizes": "272x273"
+      }]
 }
