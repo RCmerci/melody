@@ -370,18 +370,6 @@
 (def *refresh-personal-play-list (atom false))
 
 (rum/defc personal-play-list < rum/reactive
-  {:init (fn [a _b] (println "init") a)
-   :will-mount (fn [s] (println :will-mount) s)
-   :before-render (fn [s] (println :before-render) s)
-   :wrap-render (fn [f] (println :wrap-render) f)
-   :did-catch (fn [s _ _] (println :did-catch) s)
-   :did-mount (fn [s] (println :did-mount) s)
-   :after-render (fn [s] (println :after-render) s)
-   :will-remount (fn [_ s] (println :will-remount) s)
-   :should-update (fn [_ s] (println :should-update) s)
-   :will-update (fn [s] (println :will-update) s)
-   :did-update (fn [s] (println :did-update) s)
-   :will-unmount (fn [s] (println :will-unmount) s)}
   []
   (let [_ (rum/react *refresh-personal-play-list)
         *personal-play-list (rum/cursor state :personal-playlist)
