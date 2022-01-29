@@ -1,7 +1,8 @@
 {:paths ["src/main"]
  :deps
  {rum/rum                               {:mvn/version "0.12.8"}
-  thheller/shadow-cljs                  {:mvn/version "2.16.12"}}
+  thheller/shadow-cljs                  {:mvn/version "2.16.12"}
+  com.andrewmcveigh/cljs-time           {:mvn/version "0.5.2"}}
  :aliases {:cljs {:extra-paths []
                 :extra-deps {cider/cider-nrepl                {:mvn/version "0.27.4"}}
                 :main-opts  ["-m" "shadow.cljs.devtools.cli"]

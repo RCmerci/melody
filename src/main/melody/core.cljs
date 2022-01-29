@@ -1,14 +1,17 @@
 (ns melody.core
-  (:require [rum.core :as rum]
-            [melody.oss :as oss]
-            [melody.idxdb :as idxdb]
+  (:require ["/melody/util" :refer [CryptJsWordArrayToUint8Array]]
+            ["buffer" :refer [Buffer]]
+            ["crypto-js" :as c]
+            ["path" :as path]
+            [cljs-time.core :as t]
+            [cljs-time.format :as tf]
             [cljs.core.async :as a]
             [cljs.core.async.interop :refer [p->c]]
-            ["buffer" :refer [Buffer]]
-            ["path" :as path]
             [cljs.spec.alpha :as s]
-            ["crypto-js" :as c]
-            ["/melody/util" :refer [CryptJsWordArrayToUint8Array]]))
+            [goog.string :as gstring]
+            [melody.idxdb :as idxdb]
+            [melody.oss :as oss]
+            [rum.core :as rum]))
 ;;; utils
 (defn- ->array-buffer [o]
   (cond
@@ -71,7 +74,7 @@
 (s/def ::play-source (s/keys :req-un [::source ::gain-node ::audio-ctx]))
 
 ;;; state
-(def state (atom { ;; which panel to display
+(def state (atom {;; which panel to display
                   :display-type :personal-playlist
                   :personal-playlist nil
                   ;; all songs list
@@ -80,6 +83,8 @@
                   :current-volume 0.4
                   :current-play-source nil
                   :current-play-song-name nil
+
+                  :log nil
 
                   ;; control chans
                   :pause (a/chan (a/dropping-buffer 1))
@@ -95,6 +100,12 @@
 
 (defn change-default-volume! [v]
   (swap! state assoc :current-volume (/ v 100)))
+
+(defn log! [message]
+  (let [timestamp (tf/unparse (tf/formatters :hour-minute)
+                              (t/to-default-time-zone (t/now)))]
+    (swap! state assoc :log (conj (:log @state)
+                                  (str "[" timestamp "] " message)))))
 
 ;;; interop with oss
 ;; oss dirs:
@@ -129,22 +140,27 @@
 (defn download!
   "fetch from oss then store into indexdb"
   [name]
-  (a/go (some->> (a/<! (oss/get client (path/join "data" (js/encodeURIComponent name))))
-                 decrypt
-                 (store-song! name))))
+  (a/go
+    (log! (str "downloading [" name "]"))
+    (some->> (a/<! (oss/get client (path/join "data" (js/encodeURIComponent name))))
+             decrypt
+             (store-song! name))
+    (log! (str "downloaded [" name "]"))))
 
 (defn upload!
-  "upload File obj to oss and store into indexdb"
+  "upload File obj to oss and store into indexdb,
+  return chan"
   [name file]
   (a/go
-    (println "start uploading" name)
+    (log! (str "start uploading... [" name "]"))
     (let [arr-buf (a/<! (p->c (.arrayBuffer file)))
           encrypted (encrypt arr-buf)
           buf (.from Buffer encrypted)
           r (a/<! (oss/put client (path/join "data" (js/encodeURIComponent name)) buf))]
       (if (instance? ExceptionInfo r)
         (throw (js/Error. r))
-        (store-song! name arr-buf)))))
+        (do (store-song! name arr-buf)
+            (log! (str "uploaded [" name "]")))))))
 
 ;;; play
 (defn audio-data->audio-buffer-source
@@ -168,15 +184,14 @@
     (a/go (a/<! ch)
           (a/close! ch)
           (s/conform ::play-source
-           {:source source
-            :gain-node gain-node
-            :audio-ctx audio-ctx}))))
+                     {:source source
+                      :gain-node gain-node
+                      :audio-ctx audio-ctx}))))
 
 (defn song-name->data
   [name]
   {:pre [(string? name)]}
   (a/go
-
     (or
      (a/<! (get-song-data name)) ;; search in indexdb first
      (do (a/<! (download! name))    ; if not exist, then download from oss
@@ -206,15 +221,18 @@
   {:pre [(s/valid? ::play-source play-source)]}
   (set! (.-value (.-gain ^js/GainNode (:gain-node play-source))) (/ v 100)))
 
-
 ;;; different types of playlist
-(defn random-playlist
-  "return infinite random playlist"
+(defn random-playlist*
   [candidates]
   {:pre [(seq candidates)]}
   (lazy-seq
    (cons (nth candidates (rand-int (count candidates)))
-         (random-playlist candidates))))
+         (random-playlist* candidates))))
+
+(defn random-playlist
+  "return infinite random playlist"
+  [candidates]
+  (sequence (dedupe) (random-playlist* candidates)))
 
 (defn ordered-playlist
   "return infinite ordered-playlist"
@@ -241,8 +259,6 @@
             (cycle-playlist (:current-play-song-name @state)))]
       (swap! state assoc :play-list playlist)
       (swap! state assoc :play-list-mode mode))))
-
-
 
 ;;; play playlist
 (defn pause!
@@ -279,6 +295,7 @@
           end-ch (a/chan)
           ;; play first song on playlist
           play-source (a/<! (play! (first playlist) end-ch (:current-volume @state)))
+          _ (log! (str "[" (first playlist) "]"))
           _ (swap! state assoc :current-play-song-name (first playlist))
           _ (swap! state assoc :current-play-source play-source)
           {:keys [pause skip replay end]}
@@ -309,8 +326,6 @@
   (when-not (:current-play-song-name @state)
     (play-playlist!))
   (a/offer! (:replay @state) true))
-
-;;; TODO: encrypt
 
 ;;; ui
 
@@ -353,6 +368,18 @@
 (def *refresh-personal-play-list (atom false))
 
 (rum/defc personal-play-list < rum/reactive
+  {:init (fn [a _b] (println "init") a)
+   :will-mount (fn [s] (println :will-mount) s)
+   :before-render (fn [s] (println :before-render) s)
+   :wrap-render (fn [f] (println :wrap-render) f)
+   :did-catch (fn [s _ _] (println :did-catch) s)
+   :did-mount (fn [s] (println :did-mount) s)
+   :after-render (fn [s] (println :after-render) s)
+   :will-remount (fn [_ s] (println :will-remount) s)
+   :should-update (fn [_ s] (println :should-update) s)
+   :will-update (fn [s] (println :will-update) s)
+   :did-update (fn [s] (println :did-update) s)
+   :will-unmount (fn [s] (println :will-unmount) s)}
   []
   (let [_ (rum/react *refresh-personal-play-list)
         *personal-play-list (rum/cursor state :personal-playlist)
@@ -399,6 +426,17 @@
      [:option {:selected (and (= :ordered mode) "selected")} "ordered"]
      [:option {:selected (and (= :cycle mode) "selected")} "cycle"]]))
 
+(rum/defc log < rum/reactive
+  []
+  (let [logs (rum/react (rum/cursor state :log))]
+    [:div
+     (when (first logs)
+       [:div {:dangerouslySetInnerHTML
+              {:__html (str ">&nbsp;" (first logs))}}])
+     (for [l (take 2 (rest logs))]
+       [:div {:dangerouslySetInnerHTML
+              {:__html (str "&nbsp;&nbsp;&nbsp;" l)}}])]))
+
 (rum/defc controller < rum/reactive
   []
   (let [current-play-song-name (rum/react (rum/cursor state :current-play-song-name))]
@@ -424,7 +462,8 @@
               :on-change #(let [v (-> % .-target .-value js/parseInt)]
                             (some-> (:current-play-source @state)
                                     (change-volume! v))
-                            (change-default-volume! v))}]]))
+                            (change-default-volume! v))}]
+     (log)]))
 
 (rum/defc main-ui < rum/reactive
   []
@@ -464,6 +503,5 @@
                                 (reset! *accesskey-secret @secret)
                                 (set! client (oss/create-client @id @secret)))}
           "submit"]]))))
-
 
 (rum/mount (main-ui) (js/document.getElementById "root"))
