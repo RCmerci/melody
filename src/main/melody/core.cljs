@@ -93,7 +93,7 @@
 
                   ;; play list
                   :play-list nil
-                  :play-list-mode :ordered
+                  :play-list-mode :random
 
                   :accesskey-id nil
                   :accesskey-secret nil}))
