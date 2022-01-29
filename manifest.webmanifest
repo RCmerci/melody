@@ -1,0 +1,11 @@
+{
+  "name": "melody",
+  "short_name": "melody",
+  "description": "...",
+  "scope": "/melody/",
+  "start_url": "/melody/",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "display": "standalone", 
+  "icons": []
+}
