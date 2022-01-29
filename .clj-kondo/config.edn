@@ -1,4 +1,2 @@
 {:hooks {:analyze-call {rum.core/defc hooks.rum/defc
-                         rum.core/defcs hooks.rum/defcs}}
-
- }
+                         rum.core/defcs hooks.rum/defcs}}}
