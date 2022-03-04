@@ -503,6 +503,11 @@
 (rum/mount (main-ui) (js/document.getElementById "root"))
 
 
-(let [search-params (new js/URLSearchParams js/window.location.search)]
-  (set! (.-value (js/document.getElementById "id")) (.get search-params "id"))
-  (set! (.-value (js/document.getElementById "secret")) (.get search-params "secret")))
+(let [search-params (new js/URLSearchParams js/window.location.search)
+      id (.get search-params "id")
+      secret (.get search-params "secret")]
+  (set! (.-value (js/document.getElementById "id")) id)
+  (set! (.-value (js/document.getElementById "secret")) secret)
+  (reset! (rum/cursor state :accesskey-id) id)
+  (reset! (rum/cursor state :accesskey-secret) secret)
+  (set! client (oss/create-client id secret)))
