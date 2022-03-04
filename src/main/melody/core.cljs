@@ -8,10 +8,23 @@
             [cljs.core.async :as a]
             [cljs.core.async.interop :refer [p->c]]
             [cljs.spec.alpha :as s]
-            [goog.string :as gstring]
             [melody.idxdb :as idxdb]
             [melody.oss :as oss]
             [rum.core :as rum]))
+;;; specs
+(s/def ::display-type #{:personal-playlist
+                        :all-songs-list
+                        :upload})
+(s/def ::play-list-mode #{:random
+                          :ordered
+                          :cycle})
+
+(s/def ::source #(instance? js/AudioBufferSourceNode %))
+(s/def ::gain-node #(instance? js/GainNode %))
+(s/def ::audio-ctx #(instance? js/AudioContext %))
+(s/def ::play-source (s/keys :req-un [::source ::gain-node ::audio-ctx]))
+
+
 ;;; utils
 (defn- ->array-buffer [o]
   (cond
@@ -59,19 +72,6 @@
                                                  (a/offer! ch data))
                                                (a/close! ch)))
       (a/<! ch))))
-
-;;; specs
-(s/def ::display-type #{:personal-playlist
-                        :all-songs-list
-                        :upload})
-(s/def ::play-list-mode #{:random
-                          :ordered
-                          :cycle})
-
-(s/def ::source #(instance? js/AudioBufferSourceNode %))
-(s/def ::gain-node #(instance? js/GainNode %))
-(s/def ::audio-ctx #(instance? js/AudioContext %))
-(s/def ::play-source (s/keys :req-un [::source ::gain-node ::audio-ctx]))
 
 ;;; state
 (def state (atom {;; which panel to display
@@ -486,10 +486,12 @@
          [:div
           [:label "ID:"]
           [:input {:type "text"
+                   :id "id"
                    :on-change #(vreset! id (-> % .-target .-value))}]]
          [:div
           [:label "secret:"]
           [:input {:type "password"
+                   :id "secret"
                    :on-change #(vreset! secret (-> % .-target .-value))}]]
          [:button {:type "button"
                    :on-click #(do
@@ -499,3 +501,8 @@
           "submit"]]))))
 
 (rum/mount (main-ui) (js/document.getElementById "root"))
+
+
+(let [search-params (new js/URLSearchParams js/window.location.search)]
+  (set! (.-value (js/document.getElementById "id")) (.get search-params "id"))
+  (set! (.-value (js/document.getElementById "secret")) (.get search-params "secret")))
